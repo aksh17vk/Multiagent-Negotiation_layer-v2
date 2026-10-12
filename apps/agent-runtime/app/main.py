@@ -1,3 +1,4 @@
+
 import logging
 from contextlib import asynccontextmanager
 
@@ -8,11 +9,9 @@ from fastapi.responses import JSONResponse
 from app.config.settings import settings
 from app.logging_config import configure_logging
 from app.middleware import RequestContextMiddleware
-from app.schemas.agent import TaskRequest
 from app.schemas.agent import (
     TaskRequest,
     TaskValidationResponse,
-    ErrorResponse,
 )
 
 configure_logging()
@@ -41,7 +40,17 @@ async def validation_error_handler(
     request: Request,
     exc: RequestValidationError,
 ):
-    request_id = getattr(request.state, "request_id", None)
+    request_id = getattr(
+        request.state,
+        "request_id",
+        None,
+    )
+
+    logger.warning(
+        "request_validation_failed request_id=%s path=%s",
+        request_id,
+        request.url.path,
+    )
 
     return JSONResponse(
         status_code=422,
@@ -55,15 +64,22 @@ async def validation_error_handler(
     )
 
 
-
 @app.exception_handler(Exception)
 async def unexpected_error_handler(
     request: Request,
     exc: Exception,
 ):
+    request_id = getattr(
+        request.state,
+        "request_id",
+        None,
+    )
+
     logger.error(
-        "unexpected_error request_id=%s",
-        getattr(request.state, "request_id", "unknown"),
+        "unexpected_error request_id=%s method=%s path=%s",
+        request_id,
+        request.method,
+        request.url.path,
         exc_info=(type(exc), exc, exc.__traceback__),
     )
 
@@ -73,11 +89,7 @@ async def unexpected_error_handler(
             "error": {
                 "code": "INTERNAL_SERVER_ERROR",
                 "message": "An unexpected error occurred.",
-                "request_id": getattr(
-                    request.state,
-                    "request_id",
-                    None,
-                ),
+                "request_id": request_id,
             }
         },
     )
@@ -98,15 +110,6 @@ async def health_check():
         "service": "mnl-agent-runtime",
         "environment": settings.environment,
     }
-
-
-# @app.post("/api/v1/tasks/validate")
-# async def validate_task(task: TaskRequest):
-#     return {
-#         "valid": True,
-#         "task_id": task.task_id,
-#         "repository_id": task.repository_id,
-#     }
 
 
 @app.post(

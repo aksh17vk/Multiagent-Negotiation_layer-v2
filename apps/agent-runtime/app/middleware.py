@@ -1,3 +1,4 @@
+
 import logging
 from time import perf_counter
 from uuid import uuid4
@@ -17,30 +18,36 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
     ) -> Response:
         request_id = str(uuid4())
         request.state.request_id = request_id
-
-        start = perf_counter()
+        start_time = perf_counter()
 
         try:
             response = await call_next(request)
         except Exception:
+            duration_ms = round(
+                (perf_counter() - start_time) * 1000,
+                2,
+            )
+
             logger.exception(
-                "request_failed request_id=%s method=%s path=%s",
+                "request_failed request_id=%s method=%s "
+                "path=%s duration_ms=%s",
                 request_id,
                 request.method,
                 request.url.path,
+                duration_ms,
             )
             raise
 
         duration_ms = round(
-            (perf_counter() - start) * 1000,
+            (perf_counter() - start_time) * 1000,
             2,
         )
 
         response.headers["X-Request-ID"] = request_id
 
         logger.info(
-            "request_completed request_id=%s method=%s path=%s "
-            "status=%s duration_ms=%s",
+            "request_completed request_id=%s method=%s "
+            "path=%s status=%s duration_ms=%s",
             request_id,
             request.method,
             request.url.path,
@@ -49,6 +56,3 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         )
 
         return response
-
-
-    
