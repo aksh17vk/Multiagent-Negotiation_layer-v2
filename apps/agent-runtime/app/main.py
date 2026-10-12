@@ -2,12 +2,18 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.config.settings import settings
 from app.logging_config import configure_logging
 from app.middleware import RequestContextMiddleware
 from app.schemas.agent import TaskRequest
+from app.schemas.agent import (
+    TaskRequest,
+    TaskValidationResponse,
+    ErrorResponse,
+)
 
 configure_logging()
 logger = logging.getLogger("mnl.api")
@@ -28,6 +34,26 @@ app = FastAPI(
 )
 
 app.add_middleware(RequestContextMiddleware)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error_handler(
+    request: Request,
+    exc: RequestValidationError,
+):
+    request_id = getattr(request.state, "request_id", None)
+
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": {
+                "code": "VALIDATION_ERROR",
+                "message": "The request data is invalid.",
+                "request_id": request_id,
+            }
+        },
+    )
+
 
 
 @app.exception_handler(Exception)
@@ -74,10 +100,22 @@ async def health_check():
     }
 
 
-@app.post("/api/v1/tasks/validate")
+# @app.post("/api/v1/tasks/validate")
+# async def validate_task(task: TaskRequest):
+#     return {
+#         "valid": True,
+#         "task_id": task.task_id,
+#         "repository_id": task.repository_id,
+#     }
+
+
+@app.post(
+    "/api/v1/tasks/validate",
+    response_model=TaskValidationResponse,
+)
 async def validate_task(task: TaskRequest):
-    return {
-        "valid": True,
-        "task_id": task.task_id,
-        "repository_id": task.repository_id,
-    }
+    return TaskValidationResponse(
+        valid=True,
+        task_id=task.task_id,
+        repository_id=task.repository_id,
+    )
