@@ -13,6 +13,15 @@ from app.schemas.agent import (
     TaskRequest,
     TaskValidationResponse,
 )
+from app.observability.context import (
+    reset_execution_context,
+    set_execution_context,
+)
+from app.observability.events import (
+    ExecutionEvent,
+    emit_event,
+    ExecutionTimer,
+)
 
 configure_logging()
 logger = logging.getLogger("mnl.api")
@@ -112,13 +121,54 @@ async def health_check():
     }
 
 
+# @app.post(
+#     "/api/v1/tasks/validate",
+#     response_model=TaskValidationResponse,
+# )
+# async def validate_task(task: TaskRequest):
+#     return TaskValidationResponse(
+#         valid=True,
+#         task_id=task.task_id,
+#         repository_id=task.repository_id,
+#     )
+
 @app.post(
     "/api/v1/tasks/validate",
     response_model=TaskValidationResponse,
 )
 async def validate_task(task: TaskRequest):
-    return TaskValidationResponse(
-        valid=True,
-        task_id=task.task_id,
-        repository_id=task.repository_id,
-    )
+    tokens = set_execution_context(task.task_id)
+
+    try:
+        emit_event(
+            ExecutionEvent.TASK_RECEIVED,
+            metadata={"status": "received"},
+        )
+
+        with ExecutionTimer() as timer:
+            response = TaskValidationResponse(
+                valid=True,
+                task_id=task.task_id,
+                repository_id=task.repository_id,
+            )
+
+        emit_event(
+            ExecutionEvent.TASK_VALIDATION_COMPLETED,
+            metadata={
+                "status": "completed",
+                "duration_ms": timer.duration_ms,
+            },
+        )
+
+        return response
+    except Exception as exc:
+        emit_event(
+            ExecutionEvent.TASK_VALIDATION_FAILED,
+            metadata={
+                "status": "failed",
+                "error_code": type(exc).__name__,
+            },
+        )
+        raise
+    finally:
+        reset_execution_context(tokens)
