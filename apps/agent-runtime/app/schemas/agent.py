@@ -44,3 +44,9 @@ class ErrorDetail(BaseModel):
 
 class ErrorResponse(BaseModel):
     error: ErrorDetail
+
+class AgentResult(BaseModel):
+    agent_name: Literal["backend", "security"]
+    status: Literal["completed", "needs_evidence", "failed"]
+    summary: str = Field(min_length=1, max_length=5_000)
+    evidence: list[EvidenceItem] = Field(default_factory=list)
