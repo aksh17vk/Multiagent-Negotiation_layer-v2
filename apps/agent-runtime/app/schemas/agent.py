@@ -30,8 +30,13 @@ class EvidenceItem(BaseModel):
 
 
 class AgentResult(BaseModel):
-    agent_name: Literal["backend", "security"]
-    status: Literal["completed", "needs_evidence", "failed"]
+    agent_name: str = Field(min_length=1, max_length=100)
+    status: Literal[
+        "completed",
+        "needs_evidence",
+        "failed",
+        "skipped",
+    ]
     summary: str = Field(min_length=1, max_length=5_000)
     evidence: list[EvidenceItem] = Field(default_factory=list)
 
